@@ -1,5 +1,5 @@
 {
-	"name": "my-first-worker",
+	"name": "forest-cdn-worker",
 	"version": "0.0.0",
 	"private": true,
 	"scripts": {
@@ -10,10 +10,10 @@
 		"cf-typegen": "wrangler types --include-runtime=false"
 	},
 	"devDependencies": {
-		"@cloudflare/vitest-pool-workers": "^0.7.5",
-		"@cloudflare/workers-types": "^4.20250321.0",
+		"@cloudflare/vitest-pool-workers": "^0.18.4",
+		"@cloudflare/workers-types": "^5.20260708.1",
 		"typescript": "^5.5.2",
-		"vitest": "~3.0.7",
-		"wrangler": "^4.5.0"
+		"vitest": "~4.1.10",
+		"wrangler": "^4.110.0"
 	}
 }
