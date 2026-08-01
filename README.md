@@ -47,10 +47,24 @@ GET /private/abcdef87654322.tgz?expires=1770000000&signature=9f86d0818...
 
 | Response          | Meaning                                            |
 | ----------------- | -------------------------------------------------- |
-| origin response   | Signature valid and link not expired — asset served |
+| tarball bytes     | Signature valid and link not expired — asset served |
 | `403` Missing …   | `expires` or `signature` absent                    |
 | `403` Link expired| `expires` is in the past                           |
 | `403` Invalid …   | Signature did not verify                            |
+| `404` Not found   | Signature valid but no such object in the bucket   |
+
+### Encryption at rest
+
+Private tarballs are stored in R2 with
+[SSE-C](https://developers.cloudflare.com/r2/examples/ssec/): `forest-trust-gateway` encrypts
+each `private/<sha256>.tgz` object on publish under a per-object key derived as
+`HMAC-SHA256(TARBALL_ENC_KEY, <object key>)`, and this Worker derives the same key to read
+the object back through its R2 bucket binding (`PACKAGES_BUCKET`). R2 will not return the
+bytes on any path that lacks the key (public bucket URL, leaked storage credentials, or a
+leaked object hash) so a valid signature checked by this Worker is the only route to
+plaintext. The derivation is pinned by a shared test vector on both sides
+(`test/tarballEncryption.spec.ts` here, `tests/rules/tarballEncryption.test.ts` in the
+gateway).
 
 ## Getting started
 
@@ -74,12 +88,16 @@ not a plaintext var. Set it for local development and for your deployed Worker:
 ```bash
 # Local dev — create a .dev.vars file (git-ignored) containing:
 # WORKER_SIG_KEY=your-shared-secret
+# TARBALL_ENC_KEY=base64-of-32-bytes
 
 # Production
 npx wrangler secret put WORKER_SIG_KEY
+npx wrangler secret put TARBALL_ENC_KEY
 ```
 
-Use the same value on the service that signs your URLs.
+Use the same `WORKER_SIG_KEY` on the service that signs your URLs, and the same
+`TARBALL_ENC_KEY` on the service that encrypts private tarballs (both are
+`forest-trust-gateway`).
 
 ### Run locally
 
