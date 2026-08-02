@@ -11,13 +11,53 @@
  * lockfile-leaked object hash) can produce plaintext.
  */
 
+// The classification contract (prefixes, classes, vectors) lives in
+// forest-shared-resources/user-agents
+import { classifyUserAgent } from 'forest-shared-resources/user-agents';
+
+// Tarball paths are content-addressed: the sha256 is the only package identity in the URL.
+export const TARBALL_PATH = /^\/(public|private)\/([0-9a-f]{64})\.tgz$/;
+
+function recordDownload(
+  env: Env,
+  request: Request,
+  access: 'public' | 'private',
+  hash: string,
+  status: number,
+  bytes: number
+): void {
+  try {
+    env.ANALYTICS.writeDataPoint({
+      indexes: [hash],
+      blobs: [
+        access,
+        classifyUserAgent(request.headers.get('User-Agent')),
+        request.method,
+        String(status),
+        (request.cf?.colo as string) ?? '',
+        (request.cf?.country as string) ?? '',
+      ],
+      doubles: [status, bytes],
+    });
+  } catch {
+    // Analytics must never break serving.
+  }
+}
+
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const url = new URL(request.url);
 
     // Only protect the `/private/` path
     if (!url.pathname.startsWith('/private/')) {
-      return fetch(request); // Let public files go through
+      // The edge cache is consulted inside this subrequest, so the worker
+      // (and the datapoint) still runs on cache hits.
+      const res = await fetch(request); // Let public files go through
+      const m = TARBALL_PATH.exec(url.pathname);
+      if (m) {
+        recordDownload(env, request, 'public', m[2], res.status, Number(res.headers.get('content-length') ?? 0));
+      }
+      return res;
     }
 
     const expires = url.searchParams.get('expires');
@@ -42,7 +82,12 @@ export default {
       return new Response('Invalid signature', { status: 403 });
     }
 
-    return servePrivateObject(request, env.PACKAGES_BUCKET, env.TARBALL_ENC_KEY, url.pathname);
+    const res = await servePrivateObject(request, env.PACKAGES_BUCKET, env.TARBALL_ENC_KEY, url.pathname);
+    const m = TARBALL_PATH.exec(url.pathname);
+    if (m) {
+      recordDownload(env, request, 'private', m[2], res.status, res.status === 200 ? Number(res.headers.get('content-length') ?? 0) : 0);
+    }
+    return res;
   },
 } satisfies ExportedHandler<Env>;
 
@@ -119,9 +164,9 @@ async function isSignatureValid(data : string, signature : string, secret : stri
   }
 
   function hexToBytes(hex : string) {
-	const bytes = new Uint8Array(hex.length / 2);
-	for (let i = 0; i < bytes.length; i++) {
-	  bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-	}
-	return bytes;
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
   }

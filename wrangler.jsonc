@@ -21,6 +21,17 @@
 			"binding": "PACKAGES_BUCKET",
 			"bucket_name": "forest-packages"
 		}
+	],
+	/**
+	 * Download analytics: one datapoint per tarball request, keyed by the
+	 * content hash (the only package identity present in CDN URLs). Rolled
+	 * up into per-package counts by forest-backend's /internal/stats-rollup.
+	 */
+	"analytics_engine_datasets": [
+		{
+			"binding": "ANALYTICS",
+			"dataset": "forest_downloads"
+		}
 	]
 	/**
 	 * Smart Placement
