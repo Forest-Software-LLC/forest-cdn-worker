@@ -15,5 +15,8 @@
 		"typescript": "^5.5.2",
 		"vitest": "~4.1.10",
 		"wrangler": "^4.110.0"
+	},
+	"dependencies": {
+		"forest-shared-resources": "github:Forest-Software-LLC/forest-shared-resources#v0.2.0"
 	}
 }
